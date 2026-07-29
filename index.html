@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Homebrew Label Lab &middot; AppADay 083</title>
+<meta name="description" content="Design a print-ready craft beer label in your browser. Describe your beer and let Claude art-direct it, or build it by hand: bottle, can, or tap-handle formats with print-accurate PNG export.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,600&family=Oswald:wght@500;600;700&family=Playfair+Display:ital,wght@0,700;0,900;1,700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#201712; --bg2:#2a2019; --panel:#2f241c;
+    --line:rgba(240,230,214,0.12); --line2:rgba(240,230,214,0.22);
+    --ink:#f1e7d7; --muted:#b6a794; --faint:#8c7d6c;
+    --accent:#d08a34; --accent2:#e0a24a; --bed:#efe6d4;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    min-height:100dvh; display:flex; flex-direction:column;
+    background:radial-gradient(1200px 600px at 80% -10%, rgba(208,138,52,0.10), transparent 60%), var(--bg);
+    color:var(--ink);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  header.bar{
+    display:flex; align-items:center; gap:14px;
+    padding:12px clamp(14px,3vw,26px); border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  }
+  .badge{font-family:"Oswald",sans-serif; font-weight:700; letter-spacing:.14em; font-size:13px; color:var(--bg); background:var(--accent); padding:5px 9px; border-radius:6px; line-height:1}
+  .title{font-family:"Fraunces",Georgia,serif; font-weight:700; font-size:clamp(18px,2.4vw,24px); margin:0}
+  .title small{display:block; font-family:"Oswald",sans-serif; font-weight:500; letter-spacing:.22em; font-size:10px; color:var(--muted); text-transform:uppercase; margin-top:2px}
+  .head-actions{margin-left:auto; display:flex; align-items:center; gap:10px}
+  .icon-btn,.home{
+    text-decoration:none; color:var(--muted); font-family:"Oswald",sans-serif; font-weight:600;
+    letter-spacing:.12em; text-transform:uppercase; font-size:12px; border:1px solid var(--line2);
+    padding:8px 12px; border-radius:8px; transition:.18s; background:transparent; cursor:pointer; white-space:nowrap;
+  }
+  .icon-btn:hover,.home:hover{color:var(--ink); border-color:var(--accent); background:rgba(208,138,52,0.08)}
+
+  main{flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 400px}
+  #stage{
+    min-height:0; overflow:hidden; position:relative;
+    display:flex; align-items:center; justify-content:center; padding:clamp(16px,3vw,34px);
+    background:radial-gradient(120% 120% at 50% -10%, #f6efe0, var(--bed) 60%, #ddd2bd 100%);
+    box-shadow:inset 0 0 120px rgba(60,40,20,0.18);
+  }
+  #stage::before{content:""; position:absolute; inset:0; background:repeating-linear-gradient(90deg, rgba(0,0,0,0.02) 0 2px, transparent 2px 5px); opacity:.5; pointer-events:none}
+  #labelBox{position:relative; margin:auto; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 24px 48px -18px rgba(40,24,10,0.55), 0 4px 14px rgba(40,24,10,0.25), 0 0 0 1px rgba(80,55,30,0.15)}
+  #label{display:block; width:100%; height:100%}
+
+  #panel{overflow:auto; border-left:1px solid var(--line); background:linear-gradient(180deg, var(--panel), var(--bg2)); padding:clamp(16px,2vw,22px); display:flex; flex-direction:column; gap:20px}
+  .group{display:flex; flex-direction:column; gap:10px}
+  .eyebrow{font-family:"Oswald",sans-serif; font-weight:600; letter-spacing:.2em; text-transform:uppercase; font-size:11px; color:var(--accent2); margin:0; display:flex; align-items:center; gap:10px}
+  .eyebrow::after{content:""; flex:1; height:1px; background:var(--line)}
+
+  .ai-box{background:linear-gradient(180deg, rgba(208,138,52,0.10), rgba(208,138,52,0.03)); border:1px solid rgba(208,138,52,0.35); border-radius:12px; padding:13px; display:flex; flex-direction:column; gap:10px}
+  textarea{width:100%; resize:vertical; min-height:64px; background:#1b1410; color:var(--ink); border:1px solid var(--line2); border-radius:9px; padding:11px 12px; font-size:14px; font-family:inherit; line-height:1.4}
+  textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(208,138,52,0.18)}
+
+  .field{display:flex; flex-direction:column; gap:5px}
+  .field label{font-family:"Oswald",sans-serif; font-weight:500; letter-spacing:.08em; text-transform:uppercase; font-size:11px; color:var(--muted)}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  input[type=text], input[type=number], input[type=password], select{
+    width:100%; background:#1b1410; color:var(--ink); border:1px solid var(--line2); border-radius:9px;
+    padding:11px 12px; font-size:15px; font-family:inherit; transition:.16s;
+  }
+  select{appearance:none; -webkit-appearance:none; background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%); background-position:calc(100% - 18px) 18px,calc(100% - 13px) 18px; background-size:5px 5px,5px 5px; background-repeat:no-repeat}
+  input::placeholder{color:var(--faint)}
+  input:focus,select:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(208,138,52,0.18)}
+
+  .seg{display:flex; background:#1b1410; border:1px solid var(--line2); border-radius:10px; padding:4px; gap:4px}
+  .seg button{flex:1; background:transparent; color:var(--muted); border:0; cursor:pointer; font-family:"Oswald",sans-serif; font-weight:600; letter-spacing:.08em; text-transform:uppercase; font-size:12px; padding:9px 6px; border-radius:7px; transition:.16s}
+  .seg button[aria-pressed=true]{background:var(--accent); color:var(--bg)}
+  .seg button:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
+
+  .motifs{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .motif{text-align:left; cursor:pointer; background:#1b1410; color:var(--ink); border:1px solid var(--line2); border-radius:10px; padding:10px 12px; transition:.16s}
+  .motif b{display:block; font-family:"Oswald",sans-serif; font-weight:600; letter-spacing:.06em; font-size:13px}
+  .motif span{font-size:11px; color:var(--muted); line-height:1.2}
+  .motif[aria-pressed=true]{border-color:var(--accent); background:rgba(208,138,52,0.12); box-shadow:0 0 0 1px var(--accent) inset}
+  .motif:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
+
+  .schemes{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
+  .sw{cursor:pointer; border:1px solid var(--line2); border-radius:10px; padding:6px 6px 7px; background:#1b1410; transition:.16s; display:flex; flex-direction:column; gap:5px; align-items:center}
+  .sw .chips{display:flex; width:100%; height:26px; border-radius:6px; overflow:hidden; border:1px solid rgba(0,0,0,0.25)}
+  .sw .chips i{flex:1; display:block}
+  .sw small{font-family:"Oswald",sans-serif; font-weight:500; letter-spacing:.04em; font-size:9.5px; color:var(--muted); text-align:center; line-height:1.1}
+  .sw[aria-pressed=true]{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset}
+  .sw[aria-pressed=true] small{color:var(--ink)}
+  .sw:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
+
+  .actions{display:flex; gap:10px; margin-top:2px}
+  .btn{cursor:pointer; border-radius:10px; font-family:"Oswald",sans-serif; font-weight:600; letter-spacing:.1em; text-transform:uppercase; font-size:13px; padding:13px 14px; transition:.16s; border:1px solid transparent}
+  .btn.primary{flex:1; background:var(--accent); color:var(--bg)}
+  .btn.primary:hover{background:var(--accent2)}
+  .btn.ghost{background:transparent; color:var(--ink); border-color:var(--line2)}
+  .btn.ghost:hover{border-color:var(--accent); color:var(--accent2)}
+  .btn:disabled{opacity:.55; cursor:default}
+  .btn:focus-visible{outline:2px solid var(--accent2); outline-offset:2px}
+  .status{min-height:16px; font-size:12px; color:var(--muted); font-family:"Oswald",sans-serif; letter-spacing:.04em; line-height:1.35}
+
+  .custom-size{display:none; gap:12px; grid-template-columns:1fr 1fr auto; align-items:end}
+  .custom-size.show{display:grid}
+  .unit{font-family:"Oswald",sans-serif; font-size:12px; color:var(--muted); padding-bottom:12px}
+
+  .overlay{position:fixed; inset:0; background:rgba(15,10,7,0.72); display:none; align-items:center; justify-content:center; padding:20px; z-index:20}
+  .overlay.show{display:flex}
+  .modal{width:min(440px,100%); background:var(--panel); border:1px solid var(--line2); border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:14px; box-shadow:0 30px 70px rgba(0,0,0,0.5)}
+  .modal h2{font-family:"Fraunces",Georgia,serif; margin:0; font-size:20px}
+  .modal p{margin:0; font-size:13px; color:var(--muted); line-height:1.5}
+  .modal .fixed{font-family:"Oswald",sans-serif; font-size:13px; color:var(--ink); background:#1b1410; border:1px solid var(--line2); border-radius:9px; padding:11px 12px; letter-spacing:.04em}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:4px}
+
+  @media (max-width:900px){
+    main{grid-template-columns:1fr}
+    #stage{min-height:44dvh}
+    #panel{border-left:0; border-top:1px solid var(--line); width:100%; max-width:640px; margin:0 auto}
+    .head-actions .home{padding:7px 9px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+  <header class="bar">
+    <span class="badge">083</span>
+    <h1 class="title">Homebrew Label Lab<small>Design &middot; craft your can</small></h1>
+    <div class="head-actions">
+      <button class="icon-btn" id="openSettings" type="button" aria-label="Settings">Settings</button>
+      <a class="home" href="https://augustineiacopelli.github.io/appaday/">All apps &rarr;</a>
+    </div>
+  </header>
+
+  <main>
+    <section id="stage">
+      <div id="labelBox"><canvas id="label" aria-label="Live beer label preview"></canvas></div>
+    </section>
+
+    <aside id="panel">
+      <div class="group">
+        <p class="eyebrow">Design with AI</p>
+        <div class="ai-box">
+          <textarea id="desc" placeholder="Describe your beer: e.g. a hazy summer IPA bursting with mango and citrus, playful and bright"></textarea>
+          <button class="btn primary" id="generate" type="button">Art-direct my label</button>
+          <p class="status" id="aistatus">Claude picks the name, motif, and palette. Needs your API key in Settings.</p>
+        </div>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Details</p>
+        <div class="field">
+          <label for="name">Beer name</label>
+          <input id="name" type="text" maxlength="32" placeholder="Amber Vespers">
+        </div>
+        <div class="field">
+          <label for="style">Style</label>
+          <input id="style" type="text" maxlength="28" placeholder="Amber Ale" list="styles">
+          <datalist id="styles">
+            <option value="IPA"></option><option value="Hazy IPA"></option><option value="Pale Ale"></option>
+            <option value="Amber Ale"></option><option value="Pilsner"></option><option value="Lager"></option>
+            <option value="Stout"></option><option value="Porter"></option><option value="Hefeweizen"></option>
+            <option value="Saison"></option><option value="Red Ale"></option><option value="Brown Ale"></option>
+            <option value="Belgian Tripel"></option><option value="Sour"></option>
+          </datalist>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="abv">ABV %</label><input id="abv" type="number" min="0" max="20" step="0.1" placeholder="5.6"></div>
+          <div class="field"><label for="ibu">IBU</label><input id="ibu" type="number" min="0" max="120" step="1" placeholder="32"></div>
+        </div>
+        <div class="field"><label for="brewery">Brewery / tagline</label><input id="brewery" type="text" maxlength="30" placeholder="Augustino Brewing Co."></div>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Format &amp; size</p>
+        <div class="seg" id="format" role="group" aria-label="Label format">
+          <button data-format="bottle" aria-pressed="true">Bottle</button>
+          <button data-format="can" aria-pressed="false">Can</button>
+          <button data-format="tap" aria-pressed="false">Tap handle</button>
+        </div>
+        <div class="field"><label for="size">Size preset</label><select id="size"></select></div>
+        <div class="custom-size" id="customSize">
+          <div class="field"><label for="cw">Width (in)</label><input id="cw" type="number" min="1" max="12" step="0.1" value="4"></div>
+          <div class="field"><label for="ch">Height (in)</label><input id="ch" type="number" min="1" max="12" step="0.1" value="5"></div>
+          <span class="unit">in</span>
+        </div>
+        <div class="field">
+          <label>Output resolution</label>
+          <div class="seg" id="dpi" role="group" aria-label="Resolution">
+            <button data-dpi="150" aria-pressed="false">Screen 150</button>
+            <button data-dpi="300" aria-pressed="true">Print 300</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Motif</p>
+        <div class="motifs" id="motifs"></div>
+      </div>
+
+      <div class="group">
+        <p class="eyebrow">Color scheme</p>
+        <div class="schemes" id="schemes"></div>
+      </div>
+
+      <div class="group">
+        <div class="actions">
+          <button class="btn ghost" id="shuffle" type="button">Shuffle</button>
+          <button class="btn primary" id="download" type="button">Download PNG</button>
+        </div>
+        <p class="status" id="status">Print-ready PNG at full resolution.</p>
+      </div>
+    </aside>
+  </main>
+
+  <div class="overlay" id="overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mtitle">
+      <h2 id="mtitle">Settings</h2>
+      <p id="settingsNote">Your Anthropic API key is stored only in this browser and is sent directly to the Anthropic API when you art-direct a label.</p>
+      <div class="field"><label for="apikey">Anthropic API key</label><input id="apikey" type="password" placeholder="sk-ant-..." autocomplete="off"></div>
+      <div class="field"><label for="session">Session name</label><input id="session" type="text" placeholder="Homebrew session"></div>
+      <div class="field"><label>Model</label><div class="fixed" id="modelLabel"></div></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="closeSettings" type="button">Close</button>
+        <button class="btn primary" id="saveSettings" type="button" style="flex:0 0 auto">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <a id="dl" style="display:none" aria-hidden="true"></a>
+
+<script>
+(function(){
+  "use strict";
+
+  var CLAUDE_MODEL = "claude-sonnet-5";
+
+  var FORMATS = {
+    bottle:{ label:"Bottle", sizes:[
+      {l:"Standard 4 x 5 in", w:4, h:5},
+      {l:"Longneck 3 x 4 in", w:3, h:4},
+      {l:"Large 4.5 x 6 in", w:4.5, h:6}
+    ]},
+    can:{ label:"Can", sizes:[
+      {l:"12 oz  4 x 5.2 in", w:4, h:5.2},
+      {l:"16 oz  4 x 6 in", w:4, h:6},
+      {l:"Slim  2.6 x 6 in", w:2.6, h:6}
+    ]},
+    tap:{ label:"Tap handle", sizes:[
+      {l:"Blade  2 x 7 in", w:2, h:7},
+      {l:"Shield  2.6 x 5 in", w:2.6, h:5},
+      {l:"Tall  1.8 x 8 in", w:1.8, h:8}
+    ]}
+  };
+
+  var SCHEMES = [
+    { name:"Copper",  paper:"#f4e9d6", ink:"#2a1a10", accent:"#c1782e" },
+    { name:"Hazy IPA",paper:"#fbf3d6", ink:"#33301c", accent:"#e0a020" },
+    { name:"Ruby",    paper:"#f6e7de", ink:"#2e1414", accent:"#a4302f" },
+    { name:"Pilsner", paper:"#fbf6e2", ink:"#38331a", accent:"#c9a227" },
+    { name:"Hop",     paper:"#eef0da", ink:"#242a1a", accent:"#6f8b3d" },
+    { name:"Stout",   paper:"#ece4d6", ink:"#1d1613", accent:"#9a6a34" },
+    { name:"Slate",   paper:"#e8ecee", ink:"#1b2226", accent:"#3e7c93" },
+    { name:"Saison",  paper:"#f1e8ef", ink:"#241826", accent:"#7a4a82" }
+  ];
+
+  var MOTIFS = [
+    { id:"crest",     label:"Hop Crest", note:"Emblem + serif",   draw:drawCrest },
+    { id:"stripe",    label:"Modern",    note:"Bold minimal",     draw:drawStripe },
+    { id:"vintage",   label:"Vintage",   note:"Ornate frame",     draw:drawVintage },
+    { id:"bold",      label:"Bold Type", note:"Slab headline",    draw:drawBold },
+    { id:"botanical", label:"Botanical", note:"Wheat + Fraunces", draw:drawBotanical }
+  ];
+  function motifIndex(id){ for(var i=0;i<MOTIFS.length;i++){ if(MOTIFS[i].id===id) return i; } return -1; }
+
+  var state = {
+    name:"Amber Vespers", style:"Amber Ale", abv:"5.6", ibu:"32", brewery:"Augustino Brewing Co.",
+    motif:0, scheme:0, aiPalette:null,
+    format:"bottle", size:0, dpi:300, cw:4, ch:5
+  };
+
+  var KEY_DESIGN="appaday083.design", KEY_KEY="appaday083.key", KEY_SESSION="appaday083.session";
+  var canvas=document.getElementById("label"), ctx=canvas.getContext("2d");
+  var CUR={w:1200,h:1500};
+
+  /* ---------- persistence ---------- */
+  function load(){
+    try{ var raw=localStorage.getItem(KEY_DESIGN); if(raw){ var o=JSON.parse(raw); for(var k in o){ if(state.hasOwnProperty(k)) state[k]=o[k]; } } }catch(e){}
+  }
+  function save(){ try{ localStorage.setItem(KEY_DESIGN, JSON.stringify(state)); }catch(e){} }
+  function getKey(){ try{ return localStorage.getItem(KEY_KEY)||""; }catch(e){ return ""; } }
+  function getSession(){ try{ return localStorage.getItem(KEY_SESSION)||""; }catch(e){ return ""; } }
+
+  /* ---------- canvas helpers ---------- */
+  function setFont(weight,size,family){ ctx.font = weight + " " + size + 'px "' + family + '"'; }
+  function roundRectPath(x,y,w,h,r){
+    r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+  function spaced(text,x,y,gap,align){
+    align=align||"center"; var chars=String(text).split(""), total=0, i;
+    for(i=0;i<chars.length;i++) total+=ctx.measureText(chars[i]).width+gap;
+    total-=gap; var sx = align==="center"?x-total/2:align==="right"?x-total:x;
+    var pa=ctx.textAlign; ctx.textAlign="left";
+    for(i=0;i<chars.length;i++){ ctx.fillText(chars[i],sx,y); sx+=ctx.measureText(chars[i]).width+gap; }
+    ctx.textAlign=pa;
+  }
+  function wrapLines(text,maxW){
+    var words=String(text).split(/\s+/), lines=[], cur="", i;
+    for(i=0;i<words.length;i++){ var t=cur?cur+" "+words[i]:words[i];
+      if(ctx.measureText(t).width<=maxW||!cur){ cur=t; } else { lines.push(cur); cur=words[i]; } }
+    if(cur) lines.push(cur); return lines;
+  }
+  function fitName(text,family,weight,maxW,maxLines,big,small){
+    text=String(text||"").trim()||"Untitled";
+    for(var sz=big; sz>=small; sz-=2){ setFont(weight,sz,family); var lines=wrapLines(text,maxW); if(lines.length<=maxLines) return {size:sz,lines:lines}; }
+    setFont(weight,small,family); return {size:small,lines:wrapLines(text,small?maxW:maxW).slice(0,maxLines)};
+  }
+  function rule(cx,y,w,color,th){ ctx.fillStyle=color; ctx.fillRect(cx-w/2,y,w,th); }
+
+  function hopMark(cx,cy,h,color,lite){
+    var w=h*0.52, i; ctx.save(); ctx.translate(cx,cy); ctx.fillStyle=color;
+    ctx.beginPath(); ctx.moveTo(0,-h*0.5);
+    ctx.quadraticCurveTo(w*0.64,-h*0.28,w*0.5,h*0.06);
+    ctx.quadraticCurveTo(w*0.34,h*0.42,0,h*0.5);
+    ctx.quadraticCurveTo(-w*0.34,h*0.42,-w*0.5,h*0.06);
+    ctx.quadraticCurveTo(-w*0.64,-h*0.28,0,-h*0.5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=lite; ctx.lineWidth=h*0.022; ctx.lineCap="round"; ctx.lineJoin="round";
+    for(i=-3;i<=3;i++){ var yy=i*h*0.115, ww=w*0.44*(1-Math.abs(yy)/(h*0.62)); if(ww<=0) continue;
+      ctx.beginPath(); ctx.moveTo(-ww,yy-h*0.02); ctx.lineTo(0,yy+h*0.035); ctx.lineTo(ww,yy-h*0.02); ctx.stroke(); }
+    ctx.strokeStyle=color; ctx.lineWidth=h*0.03; ctx.beginPath(); ctx.moveTo(0,-h*0.5); ctx.lineTo(0,-h*0.6); ctx.stroke();
+    ctx.restore();
+  }
+  function grain(len,ang,color){ ctx.save(); ctx.rotate(ang); ctx.fillStyle=color;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(len*0.5,-len*0.30,len,-len*0.02);
+    ctx.quadraticCurveTo(len*0.5,len*0.30,0,0); ctx.closePath(); ctx.fill(); ctx.restore(); }
+  function wheatMark(cx,cy,h,grainColor,stemColor){
+    ctx.save(); ctx.translate(cx,cy); ctx.strokeStyle=stemColor; ctx.lineWidth=h*0.03; ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(0,h*0.5); ctx.lineTo(0,-h*0.5); ctx.stroke(); ctx.fillStyle=grainColor;
+    var rows=5,i; for(i=0;i<rows;i++){ var yy=-h*0.42+i*(h*0.15), len=h*0.20*(0.7+i/rows*0.5);
+      ctx.save(); ctx.translate(0,yy); grain(len,-0.55,grainColor); ctx.restore();
+      ctx.save(); ctx.translate(0,yy); ctx.scale(-1,1); grain(len,-0.55,grainColor); ctx.restore(); }
+    ctx.save(); ctx.translate(0,-h*0.5); grain(h*0.22,-Math.PI/2,grainColor); ctx.restore(); ctx.restore();
+  }
+  function statsAt(W,s,sc,y){
+    ctx.textAlign="center"; var abv=s.abv!==""?s.abv+"% ABV":"", ibu=s.ibu!==""?s.ibu+" IBU":"";
+    setFont("700",W*0.030,"Oswald"); ctx.fillStyle=sc.ink;
+    if(abv&&ibu){ var g=W*0.145; spaced(abv,W/2-g,y,W*0.006); spaced(ibu,W/2+g,y,W*0.006);
+      ctx.fillStyle=sc.accent; ctx.beginPath(); ctx.arc(W/2,y-W*0.011,W*0.011,0,2*Math.PI); ctx.fill(); }
+    else if(abv) spaced(abv,W/2,y,W*0.006); else if(ibu) spaced(ibu,W/2,y,W*0.006);
+  }
+
+  /* ---------- vertical flow ---------- */
+  function flow(W,H,blocks,topM,botM){
+    var total=0,i; for(i=0;i<blocks.length;i++){ total+=blocks[i].h+(i<blocks.length-1?(blocks[i].gap||0):0); }
+    var avail=H-topM-botM, y=topM+Math.max(0,(avail-total)/2);
+    for(i=0;i<blocks.length;i++){ blocks[i].draw(W/2,y); y+=blocks[i].h+(blocks[i].gap||0); }
+  }
+  function bSpaced(text,family,weight,size,color,gap,ls){
+    return { h:size*1.18, gap:gap||0, draw:function(cx,y){ setFont(weight,size,family); ctx.fillStyle=color; spaced(String(text),cx,y+size,ls,"center"); } };
+  }
+  function bName(text,family,weight,maxW,big,small,color,maxLines,gap){
+    var nm=fitName(text,family,weight,maxW,maxLines,big,small), lh=nm.size*1.03;
+    return { h:(nm.lines.length-1)*lh+nm.size*1.2, gap:gap||0, draw:function(cx,y){
+      setFont(weight,nm.size,family); ctx.fillStyle=color; ctx.textAlign="center";
+      for(var i=0;i<nm.lines.length;i++) ctx.fillText(nm.lines[i],cx,y+nm.size+i*lh); } };
+  }
+  function bEmblem(R,sc,gap){
+    return { h:2*R, gap:gap||0, draw:function(cx,y){ var cy=y+R;
+      ctx.beginPath(); ctx.arc(cx,cy,R,0,2*Math.PI); ctx.lineWidth=R*0.05; ctx.strokeStyle=sc.accent; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx,cy,R*0.86,0,2*Math.PI); ctx.lineWidth=R*0.014; ctx.strokeStyle=sc.ink; ctx.stroke();
+      hopMark(cx,cy,R*1.05,sc.ink,sc.paper); } };
+  }
+  function bRule(w,color,th,gap){ return { h:th, gap:gap||0, draw:function(cx,y){ rule(cx,y,w,color,th); } }; }
+  function bStats(W,s,sc,gap){ return { h:W*0.05, gap:gap||0, draw:function(cx,y){ statsAt(W,s,sc,y+W*0.033); } }; }
+  function bWheat(W,markH,gap){ return { h:markH, gap:gap||0, draw:function(cx,y){ /* placeholder */ } }; }
+
+  /* ---------- motifs ---------- */
+  function drawCrest(W,H,s,sc){
+    ctx.fillStyle=sc.paper; ctx.fillRect(0,0,W,H);
+    var m=W*0.085;
+    ctx.strokeStyle=sc.ink; ctx.lineWidth=W*0.006; roundRectPath(m,m,W-2*m,H-2*m,W*0.03); ctx.stroke();
+    ctx.lineWidth=W*0.0022; roundRectPath(m+W*0.02,m+W*0.02,W-2*m-W*0.04,H-2*m-W*0.04,W*0.02); ctx.stroke();
+    var blocks=[];
+    if(s.brewery) blocks.push(bSpaced(String(s.brewery).toUpperCase(),"Oswald","600",W*0.032,sc.ink,W*0.02,W*0.012));
+    blocks.push(bRule(W*0.30,sc.accent,W*0.004,W*0.05));
+    blocks.push(bEmblem(W*0.165,sc,W*0.055));
+    blocks.push(bName(s.name,"Playfair Display","700",W-2*m-W*0.09,2,W*0.115,W*0.05,sc.ink,W*0.028));
+    if(s.style) blocks.push(bSpaced(String(s.style).toUpperCase(),"Oswald","600",W*0.036,sc.accent,W*0.04,W*0.010));
+    if(s.abv!==""||s.ibu!=="") blocks.push(bStats(W,s,sc,0));
+    flow(W,H,blocks,W*0.20,W*0.16);
+  }
+
+  function drawStripe(W,H,s,sc){
+    ctx.fillStyle=sc.paper; ctx.fillRect(0,0,W,H);
+    var m=W*0.10;
+    ctx.fillStyle=sc.ink; ctx.textAlign="left"; setFont("600",W*0.030,"Oswald");
+    if(s.brewery) spaced(String(s.brewery).toUpperCase(),m,H*0.115,W*0.010,"left");
+    ctx.fillStyle=sc.accent; ctx.fillRect(m,H*0.135,W*0.20,H*0.006);
+
+    var maxW=W-2*m, up=String(s.name).toUpperCase();
+    var nm=fitName(up,"Oswald","700",maxW,3,W*0.155,W*0.06), lh=nm.size*0.98;
+    var blockH=(nm.lines.length-1)*lh+nm.size, styleH = s.style?W*0.046*1.3:0;
+    var midTop=H*0.20, midBot=H*0.82, total=blockH+styleH+ (s.style?W*0.03:0);
+    var ny=midTop+Math.max(0,((midBot-midTop)-total)/2)+nm.size;
+    ctx.fillStyle=sc.ink; setFont("700",nm.size,"Oswald"); ctx.textAlign="left";
+    for(var i=0;i<nm.lines.length;i++) ctx.fillText(nm.lines[i],m,ny+i*lh);
+    var after=ny+(nm.lines.length-1)*lh+nm.size*0.62;
+    if(s.style){ setFont("600",W*0.046,"Oswald"); ctx.fillStyle=sc.accent; spaced(String(s.style).toUpperCase(),m,after,W*0.008,"left"); }
+
+    var by=H*0.9; ctx.fillStyle=sc.ink; ctx.fillRect(m,by-H*0.045,W-2*m,H*0.0022);
+    setFont("700",W*0.032,"Oswald"); ctx.fillStyle=sc.ink;
+    if(s.abv!=="") spaced(s.abv+"% ABV",m,by,W*0.006,"left");
+    if(s.ibu!=="") spaced(s.ibu+" IBU",W-m,by,W*0.006,"right");
+  }
+
+  function drawVintage(W,H,s,sc){
+    ctx.fillStyle=sc.paper; ctx.fillRect(0,0,W,H);
+    var m=W*0.07,i; ctx.strokeStyle=sc.ink;
+    ctx.lineWidth=W*0.009; ctx.strokeRect(m,m,W-2*m,H-2*m);
+    ctx.lineWidth=W*0.0028; ctx.strokeRect(m+W*0.022,m+W*0.022,W-2*m-W*0.044,H-2*m-W*0.044);
+    var cs=[[m,m],[W-m,m],[m,H-m],[W-m,H-m]]; ctx.fillStyle=sc.accent;
+    for(i=0;i<cs.length;i++){ ctx.save(); ctx.translate(cs[i][0],cs[i][1]); ctx.rotate(Math.PI/4); var d=W*0.014; ctx.fillRect(-d,-d,2*d,2*d); ctx.restore(); }
+
+    var blocks=[];
+    blocks.push({ h:H*0.072, gap:W*0.05, draw:function(cx,y){ ribbon(cx,y+H*0.036,W*0.64,H*0.072,sc.accent,sc.paper,s.brewery); } });
+    blocks.push(bName(s.name,"Playfair Display","900",W-2*m-W*0.10,2,W*0.122,W*0.056,sc.ink,W*0.02));
+    blocks.push({ h:W*0.04, gap:W*0.035, draw:function(cx,y){ divider(cx,y+W*0.02,W*0.26,sc.ink,sc.accent); } });
+    if(s.style) blocks.push({ h:W*0.05*1.3, gap:0, draw:function(cx,y){ setFont("italic 700",W*0.05,"Playfair Display"); ctx.fillStyle=sc.ink; ctx.textAlign="center"; ctx.fillText(String(s.style),cx,y+W*0.05); } });
+    if(s.abv!==""||s.ibu!=="") blocks.push(bStats(W,s,sc,0));
+    flow(W,H,blocks,W*0.16,W*0.14);
+  }
+  function ribbon(cx,cy,w,h,fill,textColor,text){
+    var x=cx-w/2,y=cy-h/2,notch=h*0.5; ctx.fillStyle=fill; ctx.beginPath();
+    ctx.moveTo(x,y); ctx.lineTo(x+w,y); ctx.lineTo(x+w-notch,y+h/2); ctx.lineTo(x+w,y+h);
+    ctx.lineTo(x,y+h); ctx.lineTo(x+notch,y+h/2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=textColor; setFont("600",h*0.40,"Oswald"); ctx.textAlign="center"; ctx.textBaseline="middle";
+    spaced(String(text||"").toUpperCase(),cx,cy,h*0.05,"center"); ctx.textBaseline="alphabetic";
+  }
+  function divider(cx,y,w,ink,accent){
+    ctx.strokeStyle=ink; ctx.lineWidth=w*0.014; ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(cx-w/2,y); ctx.lineTo(cx-w*0.10,y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+w*0.10,y); ctx.lineTo(cx+w/2,y); ctx.stroke();
+    ctx.save(); ctx.translate(cx,y); ctx.rotate(Math.PI/4); ctx.fillStyle=accent; var d=w*0.05; ctx.fillRect(-d,-d,2*d,2*d); ctx.restore();
+  }
+
+  function drawBold(W,H,s,sc){
+    ctx.fillStyle=sc.ink; ctx.fillRect(0,0,W,H);
+    var m=W*0.09,i;
+    ctx.fillStyle=sc.paper; ctx.textAlign="left"; setFont("600",W*0.032,"Oswald");
+    if(s.brewery) spaced(String(s.brewery).toUpperCase(),m,H*0.10,W*0.010,"left");
+    ctx.fillStyle=sc.accent; ctx.fillRect(m,H*0.122,W*0.16,H*0.006);
+
+    var footY=H*0.855;
+    var up=String(s.name).toUpperCase();
+    var nm=fitName(up,"Alfa Slab One","400",W-2*m,3,W*0.235,W*0.075), lh=nm.size*0.98;
+    var blockH=lh*(nm.lines.length-1)+nm.size;
+    var midTop=H*0.16, midBot=footY, ny=midTop+Math.max(0,((midBot-midTop)-blockH)/2)+nm.size*0.82;
+    ctx.fillStyle=sc.paper; setFont("400",nm.size,"Alfa Slab One"); ctx.textAlign="left";
+    for(i=0;i<nm.lines.length;i++) ctx.fillText(nm.lines[i],m,ny+i*lh);
+
+    ctx.fillStyle=sc.accent; ctx.fillRect(0,footY,W,H-footY);
+    var fmid=footY+(H-footY)/2;
+    ctx.fillStyle=sc.ink; setFont("700",W*0.036,"Oswald"); ctx.textBaseline="middle";
+    if(s.style) spaced(String(s.style).toUpperCase(),m,fmid,W*0.010,"left");
+    var parts=[]; if(s.abv!=="") parts.push(s.abv+"% ABV"); if(s.ibu!=="") parts.push(s.ibu+" IBU");
+    if(parts.length) spaced(parts.join("   /   "),W-m,fmid,W*0.006,"right");
+    ctx.textBaseline="alphabetic";
+  }
+
+  function drawBotanical(W,H,s,sc){
+    ctx.fillStyle=sc.paper; ctx.fillRect(0,0,W,H);
+    var m=W*0.10; ctx.strokeStyle=sc.ink; ctx.lineWidth=W*0.0025; ctx.strokeRect(m*0.7,m*0.7,W-1.4*m,H-1.4*m);
+    var blocks=[];
+    if(s.brewery) blocks.push(bSpaced(String(s.brewery).toUpperCase(),"Oswald","600",W*0.030,sc.ink,W*0.05,W*0.012));
+    blocks.push({ h:W*0.16, gap:W*0.045, draw:function(cx,y){ var mh=W*0.16, cy=y+mh/2;
+      wheatMark(cx-W*0.16,cy,mh,sc.accent,sc.ink); wheatMark(cx+W*0.16,cy,mh,sc.accent,sc.ink); } });
+    blocks.push(bName(s.name,"Fraunces","700",W-2*m-W*0.04,2,W*0.112,W*0.05,sc.ink,W*0.028));
+    blocks.push(bRule(W*0.22,sc.accent,W*0.004,W*0.04));
+    if(s.style) blocks.push(bSpaced(String(s.style).toUpperCase(),"Oswald","600",W*0.038,sc.ink,W*0.03,W*0.010));
+    if(s.abv!==""||s.ibu!=="") blocks.push(bStats(W,s,sc,0));
+    flow(W,H,blocks,W*0.18,W*0.15);
+  }
+
+  /* ---------- render ---------- */
+  function getScheme(){ return (state.scheme==="ai" && state.aiPalette) ? state.aiPalette : (SCHEMES[state.scheme]||SCHEMES[0]); }
+  function computeCUR(){
+    var win, hin;
+    if(state.size==="custom"){ win=+state.cw||4; hin=+state.ch||5; }
+    else { var arr=FORMATS[state.format].sizes, idx=Math.min(state.size, arr.length-1); win=arr[idx].w; hin=arr[idx].h; }
+    var dpi=state.dpi||300;
+    var w=Math.round(win*dpi), h=Math.round(hin*dpi);
+    var cap=3000; if(w>cap){ h=Math.round(h*cap/w); w=cap; } if(h>cap){ w=Math.round(w*cap/h); h=cap; }
+    w=Math.max(300,w); h=Math.max(300,h);
+    CUR={w:w,h:h,win:win,hin:hin,dpi:dpi};
+  }
+  function render(){
+    computeCUR();
+    if(canvas.width!==CUR.w) canvas.width=CUR.w;
+    if(canvas.height!==CUR.h) canvas.height=CUR.h;
+    document.getElementById("labelBox").style.aspectRatio = CUR.w+" / "+CUR.h;
+    ctx.save(); ctx.clearRect(0,0,CUR.w,CUR.h); ctx.textBaseline="alphabetic"; ctx.lineJoin="round";
+    (MOTIFS[state.motif]||MOTIFS[0]).draw(CUR.w,CUR.h,state,getScheme());
+    ctx.restore();
+  }
+  function fitLabel(){
+    var stage=document.getElementById("stage"), box=document.getElementById("labelBox");
+    var pad=2*parseFloat(getComputedStyle(stage).paddingLeft||"24");
+    var availW=stage.clientWidth-pad, availH=stage.clientHeight-pad;
+    if(availW<=0||availH<=0) return;
+    var ar=CUR.w/CUR.h, w=availW, h=w/ar; if(h>availH){ h=availH; w=h*ar; }
+    box.style.width=Math.max(60,w)+"px"; box.style.height=Math.max(60,h)+"px";
+  }
+
+  /* ---------- ui build ---------- */
+  function buildMotifs(){
+    var wrap=document.getElementById("motifs"); wrap.innerHTML="";
+    MOTIFS.forEach(function(mo,idx){
+      var b=document.createElement("button"); b.className="motif"; b.type="button";
+      b.setAttribute("aria-pressed", idx===state.motif?"true":"false");
+      b.innerHTML="<b>"+mo.label+"</b><span>"+mo.note+"</span>";
+      b.addEventListener("click", function(){ state.motif=idx; syncMotifs(); render(); save(); });
+      wrap.appendChild(b);
+    });
+  }
+  function syncMotifs(){ var bs=document.querySelectorAll("#motifs .motif"); for(var i=0;i<bs.length;i++) bs[i].setAttribute("aria-pressed", i===state.motif?"true":"false"); }
+  function buildSchemes(){
+    var wrap=document.getElementById("schemes"); wrap.innerHTML="";
+    if(state.aiPalette){
+      var a=document.createElement("button"); a.className="sw"; a.type="button"; a.title="AI palette";
+      a.setAttribute("aria-pressed", state.scheme==="ai"?"true":"false");
+      a.innerHTML='<span class="chips"><i style="background:'+state.aiPalette.paper+'"></i><i style="background:'+state.aiPalette.accent+'"></i><i style="background:'+state.aiPalette.ink+'"></i></span><small>AI</small>';
+      a.addEventListener("click", function(){ state.scheme="ai"; syncSchemes(); render(); save(); });
+      wrap.appendChild(a);
+    }
+    SCHEMES.forEach(function(sc,idx){
+      var b=document.createElement("button"); b.className="sw"; b.type="button"; b.title=sc.name;
+      b.setAttribute("aria-pressed", idx===state.scheme?"true":"false");
+      b.innerHTML='<span class="chips"><i style="background:'+sc.paper+'"></i><i style="background:'+sc.accent+'"></i><i style="background:'+sc.ink+'"></i></span><small>'+sc.name+"</small>";
+      b.addEventListener("click", function(){ state.scheme=idx; syncSchemes(); render(); save(); });
+      wrap.appendChild(b);
+    });
+  }
+  function syncSchemes(){
+    var bs=document.querySelectorAll("#schemes .sw"), n=0;
+    if(state.aiPalette){ bs[0].setAttribute("aria-pressed", state.scheme==="ai"?"true":"false"); n=1; }
+    for(var i=n;i<bs.length;i++) bs[i].setAttribute("aria-pressed", (i-n)===state.scheme?"true":"false");
+  }
+  function syncFormat(){ var bs=document.querySelectorAll("#format button"); for(var i=0;i<bs.length;i++) bs[i].setAttribute("aria-pressed", bs[i].getAttribute("data-format")===state.format?"true":"false"); }
+  function syncDpi(){ var bs=document.querySelectorAll("#dpi button"); for(var i=0;i<bs.length;i++) bs[i].setAttribute("aria-pressed", (+bs[i].getAttribute("data-dpi"))===state.dpi?"true":"false"); }
+  function buildSizes(){
+    var sel=document.getElementById("size"); sel.innerHTML="";
+    FORMATS[state.format].sizes.forEach(function(sz,idx){ var o=document.createElement("option"); o.value=String(idx); o.textContent=sz.l; sel.appendChild(o); });
+    var oc=document.createElement("option"); oc.value="custom"; oc.textContent="Custom size..."; sel.appendChild(oc);
+    sel.value = state.size==="custom" ? "custom" : String(Math.min(state.size, FORMATS[state.format].sizes.length-1));
+    document.getElementById("customSize").classList.toggle("show", state.size==="custom");
+  }
+  function updateSizeStatus(){
+    var t = CUR.win && CUR.hin ? (CUR.win+" x "+CUR.hin+' in  \u00B7  '+CUR.w+" x "+CUR.h+" px @ "+CUR.dpi+" dpi") : "";
+    document.getElementById("status").textContent = "Export: "+t;
+  }
+
+  function bindInput(id){
+    var el=document.getElementById(id); el.value=state[id];
+    el.addEventListener("input", function(){ var v=el.value; if(id==="abv"||id==="ibu"){ v=v.replace(/[^0-9.]/g,""); } state[id]=v; render(); save(); });
+  }
+
+  function slug(t){ return String(t||"beer").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40)||"beer"; }
+  function status(msg){ document.getElementById("status").textContent=msg; }
+  function aistatus(msg){ document.getElementById("aistatus").textContent=msg; }
+
+  function download(){
+    try{
+      canvas.toBlob(function(blob){
+        if(!blob){ status("Export failed. Try again."); return; }
+        var a=document.getElementById("dl"), url=URL.createObjectURL(blob);
+        a.href=url; a.download=slug(state.name)+"-"+state.format+"-label.png"; a.click();
+        setTimeout(function(){ URL.revokeObjectURL(url); },2000);
+        status("Saved "+a.download+"  ("+CUR.w+" x "+CUR.h+" px)");
+      },"image/png");
+    }catch(e){ status("Export not supported in this browser."); }
+  }
+  function shuffle(){
+    var m=state.motif,s2=(state.scheme==="ai"?-1:state.scheme);
+    while(MOTIFS.length>1&&m===state.motif) m=Math.floor(Math.random()*MOTIFS.length);
+    var ns=s2; while(SCHEMES.length>1&&ns===s2) ns=Math.floor(Math.random()*SCHEMES.length);
+    state.motif=m; state.scheme=ns; syncMotifs(); syncSchemes(); render(); save();
+    status("Shuffled: "+MOTIFS[m].label+" / "+SCHEMES[ns].name);
+  }
+
+  /* ---------- settings modal ---------- */
+  function openSettings(note){
+    if(note) document.getElementById("settingsNote").textContent=note;
+    document.getElementById("apikey").value=getKey();
+    document.getElementById("session").value=getSession();
+    document.getElementById("modelLabel").textContent=CLAUDE_MODEL;
+    var ov=document.getElementById("overlay"); ov.classList.add("show"); ov.setAttribute("aria-hidden","false");
+  }
+  function closeSettings(){ var ov=document.getElementById("overlay"); ov.classList.remove("show"); ov.setAttribute("aria-hidden","true"); }
+  function saveSettings(){
+    try{ localStorage.setItem(KEY_KEY, document.getElementById("apikey").value.trim());
+         localStorage.setItem(KEY_SESSION, document.getElementById("session").value.trim()); }catch(e){}
+    closeSettings(); refreshAiHint();
+  }
+  function refreshAiHint(){ aistatus(getKey() ? "Ready. Describe your beer and let Claude art-direct it." : "Claude picks the name, motif, and palette. Add your API key in Settings."); }
+
+  /* ---------- AI art director ---------- */
+  function applyAI(o){
+    if(o.name!=null){ state.name=String(o.name).slice(0,32); document.getElementById("name").value=state.name; }
+    if(o.style!=null){ state.style=String(o.style).slice(0,28); document.getElementById("style").value=state.style; }
+    if(o.abv!=null){ state.abv=String(o.abv).replace(/[^0-9.]/g,""); document.getElementById("abv").value=state.abv; }
+    if(o.ibu!=null){ state.ibu=String(o.ibu).replace(/[^0-9.]/g,""); document.getElementById("ibu").value=state.ibu; }
+    if(o.brewery!=null){ state.brewery=String(o.brewery).slice(0,30); document.getElementById("brewery").value=state.brewery; }
+    if(o.motif){ var mi=motifIndex(String(o.motif).toLowerCase()); if(mi>=0){ state.motif=mi; syncMotifs(); } }
+    var p=o.palette||o.colors;
+    if(p&&p.paper&&p.ink&&p.accent&&/^#?[0-9a-fA-F]{3,6}$/.test(String(p.paper))){
+      var fix=function(h){ h=String(h).trim(); return h[0]==="#"?h:"#"+h; };
+      state.aiPalette={ name:"AI", paper:fix(p.paper), ink:fix(p.ink), accent:fix(p.accent) };
+      state.scheme="ai"; buildSchemes();
+    }
+    render(); save();
+  }
+  function extractJSON(text){
+    var t=String(text).replace(/```json/gi,"").replace(/```/g,"").trim();
+    var a=t.indexOf("{"), b=t.lastIndexOf("}");
+    if(a>=0&&b>a) t=t.slice(a,b+1);
+    return JSON.parse(t);
+  }
+  function aiGenerate(){
+    var key=getKey();
+    if(!key){ openSettings("Add your Anthropic API key to art-direct labels with Claude."); return; }
+    var desc=document.getElementById("desc").value.trim();
+    if(!desc){ aistatus("Describe your beer first, then generate."); return; }
+    var btn=document.getElementById("generate"); btn.disabled=true; aistatus("Claude is art-directing your label...");
+    var sys="You are a craft-beer label art director. Given a beer description, respond with ONLY a raw JSON object and nothing else (no prose, no markdown fences). Keys: name (string, up to 26 chars), style (string, up to 22 chars), abv (numeric string like \"6.2\"), ibu (numeric string like \"45\"), brewery (string up to 26 chars), motif (exactly one of: crest, stripe, vintage, bold, botanical), palette (object with paper, ink, accent as 6-digit hex color strings starting with #; paper must be light, ink must be dark, accent a vivid mid-tone that fits the beer). Pick motif and palette to match the mood of the description.";
+    fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{ "content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true" },
+      body:JSON.stringify({ model:CLAUDE_MODEL, max_tokens:1024, system:sys, messages:[{ role:"user", content:desc }] })
+    }).then(function(res){
+      if(!res.ok) return res.text().then(function(t){ throw new Error("API "+res.status); });
+      return res.json();
+    }).then(function(data){
+      var text=(data.content||[]).filter(function(b){ return b.type==="text"; }).map(function(b){ return b.text; }).join("");
+      var obj=extractJSON(text); applyAI(obj);
+      aistatus("Applied: "+(obj.name||"design")+"  \u00B7  "+(MOTIFS[state.motif].label));
+    }).catch(function(e){
+      aistatus("Could not generate: "+e.message+". Check your key in Settings.");
+    }).then(function(){ btn.disabled=false; });
+  }
+
+  /* ---------- init ---------- */
+  function init(){
+    load();
+    ["name","style","abv","ibu","brewery"].forEach(bindInput);
+    buildMotifs(); buildSchemes(); buildSizes(); syncFormat(); syncDpi();
+
+    var fbtns=document.querySelectorAll("#format button");
+    for(var i=0;i<fbtns.length;i++){ fbtns[i].addEventListener("click", function(){ state.format=this.getAttribute("data-format"); state.size=0; buildSizes(); syncFormat(); render(); fitLabel(); updateSizeStatus(); save(); }); }
+    var dbtns=document.querySelectorAll("#dpi button");
+    for(i=0;i<dbtns.length;i++){ dbtns[i].addEventListener("click", function(){ state.dpi=+this.getAttribute("data-dpi"); syncDpi(); render(); fitLabel(); updateSizeStatus(); save(); }); }
+    document.getElementById("size").addEventListener("change", function(){ var v=this.value; state.size = v==="custom"?"custom":+v; buildSizes(); render(); fitLabel(); updateSizeStatus(); save(); });
+    document.getElementById("cw").addEventListener("input", function(){ state.cw=+this.value||4; render(); fitLabel(); updateSizeStatus(); save(); });
+    document.getElementById("ch").addEventListener("input", function(){ state.ch=+this.value||5; render(); fitLabel(); updateSizeStatus(); save(); });
+
+    document.getElementById("shuffle").addEventListener("click", shuffle);
+    document.getElementById("download").addEventListener("click", download);
+    document.getElementById("generate").addEventListener("click", aiGenerate);
+    document.getElementById("openSettings").addEventListener("click", function(){ openSettings(); });
+    document.getElementById("closeSettings").addEventListener("click", closeSettings);
+    document.getElementById("saveSettings").addEventListener("click", saveSettings);
+    document.getElementById("overlay").addEventListener("click", function(e){ if(e.target===this) closeSettings(); });
+    document.getElementById("cw").value=state.cw; document.getElementById("ch").value=state.ch;
+    window.addEventListener("resize", fitLabel);
+
+    computeCUR(); canvas.width=CUR.w; canvas.height=CUR.h;
+    fitLabel(); render(); updateSizeStatus(); refreshAiHint();
+
+    var fonts=['700 40px "Playfair Display"','900 40px "Playfair Display"','italic 700 40px "Playfair Display"',
+      '700 40px "Oswald"','600 40px "Oswald"','500 40px "Oswald"','400 40px "Alfa Slab One"','700 40px "Fraunces"','600 40px "Fraunces"'];
+    if(document.fonts&&document.fonts.load){
+      Promise.all(fonts.map(function(f){ return document.fonts.load(f).catch(function(){}); })).then(render).catch(function(){});
+      document.fonts.ready.then(function(){ fitLabel(); render(); }).catch(function(){});
+    }
+  }
+
+  if(document.readyState==="loading") window.addEventListener("load", init); else init();
+})();
+</script>
+</body>
+</html>
